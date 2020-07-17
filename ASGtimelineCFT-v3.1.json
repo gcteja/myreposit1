@@ -1,0 +1,212 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "Creates an EC2 Auto Scaling Group for Timeline",
+	"Parameters": {
+		"ASGAmiId": {
+			"Description": "The AMI ID for the Auto Scaling Group to utilize.",
+			"Type": "String",
+			"Default": "ami-0333a55a667cc00cb"
+		},
+		"ASGIAMInstanceProfile": {
+			"Description": "The IAM Instance profile for the Auto Scaling group to utilize.",
+			"Type": "String",
+			"Default": "var_ASGIAMInstanceProfile"
+		},
+		"ASGInstanceType": {
+			"Description": "The instance type of the EC2 instances in the Auto Scaling Group.",
+			"Type": "String",
+			"Default": "t2.micro"
+		},
+		"ASGSubnetIds": {
+			"Description": "List of Subnet IDs for the Auto Scaling Group to utilize.",
+			"Type": "String",
+			"Default": "subnet-f278679b"
+		},
+		"ASGName": {
+			"Type": "String",
+			"Description": "ASG Name.",
+			"Default": "TimelineASGinternal"
+		},
+		"ALBTargetGroupARN": {
+			"Type": "String",
+			"Description": "ALB target Name.",
+			"Default": "arn:aws:elasticloadbalancing:us-west-2:582241766380:targetgroup/TimelineALBinternal/986c81f6e6715914"
+			
+			
+		},
+		"SG1": {
+			"Type": "String",
+			"Description": "SG1",
+			"Default": "sg-0cccb3be29585bf6c"
+		},
+		
+		"InstanceRootVolumeSize": {
+			"Description": "Instance Root Volume Size.",
+			"Type": "String",
+			"Default": "100"
+		}
+	},
+
+	"Resources": {
+		"ASG": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
+			
+			"Properties": {
+				"AutoScalingGroupName": {
+					"Ref": "ASGName"
+				},
+				"Cooldown": "300",
+				"DesiredCapacity": "1",
+				"HealthCheckGracePeriod": "300",
+				"HealthCheckType": "EC2",
+				"LaunchConfigurationName": {
+					"Ref": "ASGLaunchConfig"
+				},
+				"TargetGroupARNs": [{
+						"Ref": "ALBTargetGroupARN"
+					}
+				],
+				
+				"MaxSize": "2",
+				"MinSize": "1",
+				"VPCZoneIdentifier": [{
+						"Ref": "ASGSubnetIds"
+					}
+				],
+				"Tags": [{
+						"Key": "Name",
+						"Value": {
+							"Ref": "ASGName"
+						},
+						"PropagateAtLaunch": "true"
+					},
+					{
+						"Key": "LCNAme",
+						"Value": {
+							"Ref": "ASGLaunchConfig"
+						},
+						"PropagateAtLaunch": "true"
+					}
+				]
+			}
+		},
+		"ASGLaunchConfig": {
+			"Type": "AWS::AutoScaling::LaunchConfiguration",
+			"Version": "1.0",
+			"Properties": {
+				"BlockDeviceMappings": [{
+						"DeviceName": "/dev/xvda",
+						"Ebs": {
+							"DeleteOnTermination": "true",
+							"VolumeSize": {
+								"Ref": "InstanceRootVolumeSize"
+							},
+							"VolumeType": "gp2"
+						}
+					}
+				],
+				"EbsOptimized": "false",
+				
+				"ImageId": {
+					"Ref": "ASGAmiId"
+				},
+				"IamInstanceProfile" : "arn:aws:iam::582241766380:instance-profile/EC2-DynamoDB-Timeline",
+				"InstanceMonitoring": "false",
+				"InstanceType": {
+					"Ref": "ASGInstanceType"
+				},
+				"KeyName" : "temaline-dev-app",
+				"SecurityGroups": [ 
+				{
+						"Ref": "SG1"
+					}
+				]
+			}
+		},
+		"ASGScaleDownPolicy": {
+			"Type": "AWS::AutoScaling::ScalingPolicy",
+			"Properties": {
+				"AdjustmentType": "ChangeInCapacity",
+				"AutoScalingGroupName": {
+					"Ref": "ASG"
+				},
+				"Cooldown": "300",
+				"PolicyType": "SimpleScaling",
+				"ScalingAdjustment": "-1"
+			}
+		},
+		"ASGScaleUpPolicy": {
+			"Type": "AWS::AutoScaling::ScalingPolicy",
+			"Properties": {
+				"AdjustmentType": "ChangeInCapacity",
+				"AutoScalingGroupName": {
+					"Ref": "ASG"
+				},
+				"Cooldown": "60",
+				"PolicyType": "SimpleScaling",
+				"ScalingAdjustment": "1"
+			}
+		},
+			"ASGAlarmHigh": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmActions": [{
+						"Ref": "ASGScaleUpPolicy"
+					}
+				],
+				"AlarmDescription": "Autoscale Scale Up Alarm",
+				"ComparisonOperator": "GreaterThanThreshold",
+				"Dimensions": [{
+						"Name": "AutoScalingGroupName",
+						"Value": {
+							"Ref": "ASG"
+						}
+					}
+				],
+				"EvaluationPeriods": "2",
+				"MetricName": "CPUUtilization",
+				"Namespace": "AWS/EC2",
+				"Period": "60",
+				"Statistic": "Average",
+				"Threshold": "75"
+			}
+		},
+		"ASGAlarmLow": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"ActionsEnabled": "true",
+				"AlarmActions": [{
+						"Ref": "ASGScaleDownPolicy"
+					}
+				],
+				"AlarmDescription": "Autoscale Scale Down Alarm",
+				"ComparisonOperator": "LessThanThreshold",
+				"Dimensions": [{
+						"Name": "AutoScalingGroupName",
+						"Value": {
+							"Ref": "ASG"
+						}
+					}
+				],
+				"EvaluationPeriods": "4",
+				"MetricName": "CPUUtilization",
+				"Namespace": "AWS/EC2",
+				"Period": "60",
+				"Statistic": "Average",
+				"Threshold": "35"
+			}
+		}
+		
+		
+	},
+
+	"Outputs": {
+		"ASGName": {
+			"Description": "Auto Scaling Group name",
+			"Value": {
+				"Ref": "ASG"
+			}
+		}
+	}
+}

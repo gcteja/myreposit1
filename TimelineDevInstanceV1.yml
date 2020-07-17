@@ -1,0 +1,254 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  AWS CloudFormation Template to Create a single EC2 instance. **WARNING** This
+  template creates an Amazon EC2 instance. You will be billed for the AWS
+  resources used if you create a stack from this template.
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  RoleName:
+    Description: Role description
+    Type: String
+    Default: EC2-DynamoDB-Timeline
+    ConstraintDescription: Must be a valid IAM Role
+  subnetID:
+    Description: subnet description
+    Type: String
+    Default: subnet-f278679b
+    ConstraintDescription: Must be a valid Subnet
+  InstanceType:
+    Description: WebServer EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t1.micro
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - t3.medium
+    ConstraintDescription: must be a valid EC2 instance type.
+  SSHLocation:
+    Description: ' The IP address range that can be used to SSH to the EC2 instances'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  GSMRSecurityGroupID:
+    Type: String
+    Description: EC2 Security Group Name
+    Default: sg-0cccb3be29585bf6c
+Mappings:
+  AWSInstanceType2Arch:
+    t1.micro:
+      Arch: HVM64
+    t2.nano:
+      Arch: HVM64
+    t2.micro:
+      Arch: HVM64
+    t2.small:
+      Arch: HVM64
+    t2.medium:
+      Arch: HVM64
+    t2.large:
+      Arch: HVM64
+    m1.small:
+      Arch: HVM64
+    m1.medium:
+      Arch: HVM64
+    m1.large:
+      Arch: HVM64
+    m1.xlarge:
+      Arch: HVM64
+    m2.xlarge:
+      Arch: HVM64
+    m2.2xlarge:
+      Arch: HVM64
+    m2.4xlarge:
+      Arch: HVM64
+    m3.medium:
+      Arch: HVM64
+    m3.large:
+      Arch: HVM64
+    m3.xlarge:
+      Arch: HVM64
+    m3.2xlarge:
+      Arch: HVM64
+    m4.large:
+      Arch: HVM64
+    m4.xlarge:
+      Arch: HVM64
+    m4.2xlarge:
+      Arch: HVM64
+    m4.4xlarge:
+      Arch: HVM64
+    m4.10xlarge:
+      Arch: HVM64
+    t3.medium:
+      Arch: HVM64
+  AWSRegionArch2AMI:
+    us-east-1:
+      HVM64: ami-0ff8a91507f77f867
+      HVMG2: ami-0a584ac55a7631c0c
+    us-west-2:
+      HVM64: ami-01ed306a12b7d1c96
+      HVMG2: ami-0e09505bc235aa82d
+    us-west-1:
+      HVM64: ami-0f65671a86f061fcd
+      HVMG2: ami-0f65671a86f061fcd
+    eu-west-1:
+      HVM64: ami-047bb4163c506cd98
+      HVMG2: ami-0a7c483d527806435
+    eu-west-2:
+      HVM64: ami-f976839e
+      HVMG2: NOT_SUPPORTED
+    eu-west-3:
+      HVM64: ami-0ebc281c20e89ba4b
+      HVMG2: NOT_SUPPORTED
+    eu-central-1:
+      HVM64: ami-0233214e13e500f77
+      HVMG2: ami-06223d46a6d0661c7
+    ap-northeast-1:
+      HVM64: ami-06cd52961ce9f0d85
+      HVMG2: ami-053cdd503598e4a9d
+    ap-northeast-2:
+      HVM64: ami-0a10b2721688ce9d2
+      HVMG2: NOT_SUPPORTED
+    ap-northeast-3:
+      HVM64: ami-0d98120a9fb693f07
+      HVMG2: NOT_SUPPORTED
+    ap-southeast-1:
+      HVM64: ami-08569b978cc4dfa10
+      HVMG2: ami-0be9df32ae9f92309
+    ap-southeast-2:
+      HVM64: ami-09b42976632b27e9b
+      HVMG2: ami-0a9ce9fecc3d1daf8
+    ap-south-1:
+      HVM64: ami-0912f71e06545ad88
+      HVMG2: ami-097b15e89dbdcfcf4
+    us-east-2:
+      HVM64: ami-0b59bfac6be064b78
+      HVMG2: NOT_SUPPORTED
+    ca-central-1:
+      HVM64: ami-0b18956f
+      HVMG2: NOT_SUPPORTED
+    sa-east-1:
+      HVM64: ami-07b14488da8ea02a0
+      HVMG2: NOT_SUPPORTED
+    cn-north-1:
+      HVM64: ami-0a4eaf6c4454eda75
+      HVMG2: NOT_SUPPORTED
+    cn-northwest-1:
+      HVM64: ami-6b6a7d09
+      HVMG2: NOT_SUPPORTED
+Resources:
+  WebServerInstance:
+    Type: 'AWS::EC2::Instance'
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          InstallAndRun:
+            - Configure
+        Configure:
+          commands:
+            a_get_certificates:
+              command: >
+                sudo yum update -y && sudo yum install epel-release yum-utils -y
+                && sudo yum install
+                http://rpms.remirepo.net/enterprise/remi-release-7.rpm -y &&
+                sudo yum install httpd git -y && sudo yum-config-manager
+                --enable remi-php72 && sudo yum install php php-common
+                php-opcache php-mcrypt php-cli php-gd php-curl php-mysql -y &&
+                sudo yum install php-simplexml -y && sudo yum provides php-xml
+                && sudo service httpd start && sudo chkconfig httpd on && cd
+                /var/www/html && sudo git clone
+                https://github.com/GCTheja/sampleawsphpdb.git && cd
+                sampleawsphpdb && sudo cp be.sh /var/www/html && cd
+                /var/www/html && sudo ./be.sh && sudo curl
+                https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+                -O && sudo python ./awslogs-agent-setup.py --region us-west-2
+                --non-interactive
+                --configfile=/var/www/html/sampleawsphpdb/awslogs.conf
+    Properties:
+      Tags:
+        - Value: TimelineDev_oldSubStackTest
+          Key: Name
+      SubnetId: !Ref subnetID
+      ImageId: !FindInMap
+        - AWSRegionArch2AMI
+        - !Ref 'AWS::Region'
+        - !FindInMap
+          - AWSInstanceType2Arch
+          - !Ref InstanceType
+          - Arch
+      InstanceType: !Ref InstanceType
+      SecurityGroupIds:
+        - !Ref GSMRSecurityGroupID
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref RoleName
+      UserData: !Base64
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash
+            - >
+              sudo yum install epel-release yum-utils -y && sudo yum install
+              http://rpms.remirepo.net/enterprise/remi-release-7.rpm -y && sudo
+              yum install httpd git -y && sudo yum-config-manager --enable
+              remi-php72 && sudo yum install php php-common php-opcache
+              php-mcrypt php-cli php-gd php-curl php-mysql -y && sudo yum
+              install php-simplexml -y && sudo yum provides php-xml && sudo
+              service httpd start && sudo chkconfig httpd on && cd /var/www/html
+              && sudo git clone https://github.com/GCTheja/sampleawsphpdb.git &&
+              cd sampleawsphpdb && sudo cp be.sh /var/www/html && cd
+              /var/www/html && sudo ./be.sh && sudo curl
+              https://s3.amazonaws.com/aws-cloudwatch/downloads/latest/awslogs-agent-setup.py
+              -O && sudo python ./awslogs-agent-setup.py --region us-west-2
+              --non-interactive
+              --configfile=/var/www/html/sampleawsphpdb/awslogs.conf
+            - |
+              # Install the files and packages from the metadata
+            - '/opt/aws/bin/cfn-init -v '
+            - ' --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource WebServerInstance '
+            - ' --configsets InstallAndRun '
+            - ' --region '
+            - !Ref 'AWS::Region'
+            - |+
+            - |
+              # Signal the status from cfn-init
+            - '/opt/aws/bin/cfn-signal -e $? '
+            - ' --stack '
+            - !Ref 'AWS::StackName'
+            - ' --resource WebServerInstance '
+            - ' --region '
+            - !Ref 'AWS::Region'
+            - |+
+Outputs:
+  WebsiteURL:
+    Description: URL for newly created LAMP stack
+    Value: !GetAtt
+      - WebServerInstance
+      - PrivateIp

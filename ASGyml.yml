@@ -1,0 +1,301 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates an EC2 Auto Scaling Group for Timeline
+Parameters:
+  ASGAmiId:
+    Description: The AMI ID for the Auto Scaling Group to utilize.
+    Type: String
+    Default: ami-0333a55a667cc00cb
+  ASGIAMInstanceProfile:
+    Description: The IAM Instance profile for the Auto Scaling group to utilize.
+    Type: String
+    Default: var_ASGIAMInstanceProfile
+  ASGInstanceType:
+    Description: The instance type of the EC2 instances in the Auto Scaling Group.
+    Type: String
+    Default: t2.micro
+  ASGSubnetIds:
+    Description: List of Subnet IDs for the Auto Scaling Group to utilize.
+    Type: String
+    Default: subnet-f278679b
+  ASGName:
+    Type: String
+    Description: ASG Name.
+    Default: TimelineALByamlTest1
+  ALBTargetGroupARN:
+    Type: String
+    Description: ALB target Name.
+    Default: arn:aws:elasticloadbalancing:us-west-2:582241766380:targetgroup/TimelineALByamlTest1/f50243c946cf6138
+  SG1:
+    Type: String
+    Description: SG1
+    Default: sg-0cccb3be29585bf6c
+  InstanceRootVolumeSize:
+    Description: Instance Root Volume Size.
+    Type: String
+    Default: '100'
+  CoolDown:
+    Description: Cooldown
+    Type: Number
+    Default: '300'
+    ConstraintDescription: CooldownASG
+  DesiredCapacity:
+    Description: DesiredCapacity
+    Type: Number
+    Default: '1'
+    ConstraintDescription: DesiredCapacity
+  HealthCheckGracePeriod:
+    Description: HealthCheckGracePeriod
+    Type: Number
+    Default: '300'
+    ConstraintDescription: HealthCheckGracePeriod
+  KeyPairName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  MaxSize:
+    Description: MaxSize
+    Type: Number
+    Default: '2'
+    ConstraintDescription: MaxSize
+  EvaluationPeriods:
+    Description: EvaluationPeriods
+    Type: Number
+    Default: '4'
+    ConstraintDescription: EvaluationPeriods
+  Threshold:
+    Description: Threshold
+    Type: Number
+    Default: '35'
+    ConstraintDescription: Threshold
+Resources:
+  ASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName:
+        Ref: ASGName
+      Cooldown:
+        Ref: CoolDown
+      DesiredCapacity:
+        Ref: DesiredCapacity
+      HealthCheckGracePeriod:
+        Ref: HealthCheckGracePeriod
+      HealthCheckType: EC2
+      LaunchConfigurationName:
+        Ref: ASGLaunchConfig
+      TargetGroupARNs:
+      - Ref: ALBTargetGroupARN
+      MaxSize:
+        Ref: MaxSize
+      MinSize:
+        Ref: DesiredCapacity
+      VPCZoneIdentifier:
+      - Ref: ASGSubnetIds
+      Tags:
+      - Key: Name
+        Value:
+          Ref: ASGName
+        PropagateAtLaunch: 'true'
+      - Key: LCNAme
+        Value:
+          Ref: ASGLaunchConfig
+        PropagateAtLaunch: 'true'
+  ASGLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Version: '1.0'
+    Properties:
+      BlockDeviceMappings:
+      - DeviceName: "/dev/xvda"
+        Ebs:
+          DeleteOnTermination: 'true'
+          VolumeSize:
+            Ref: InstanceRootVolumeSize
+          VolumeType: gp2
+      EbsOptimized: 'false'
+      ImageId:
+        Ref: ASGAmiId
+      IamInstanceProfile:
+        Ref: InstanceRoleInstanceProfile
+      InstanceMonitoring: 'false'
+      InstanceType:
+        Ref: ASGInstanceType
+      KeyName:
+        Ref: KeyPairName
+      SecurityGroups:
+      - Ref: SG1
+  ASGScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: ASG
+      Cooldown:
+        Ref: CoolDown
+      PolicyType: SimpleScaling
+      ScalingAdjustment: "-1"
+  ASGScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: ASG
+      Cooldown: '60'
+      PolicyType: SimpleScaling
+      ScalingAdjustment: '1'
+  InstanceRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - Ref: InstanceRole
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+  InstanceRolePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: InstanceRole
+      PolicyDocument:
+        Statement:
+        - Action:
+          - dynamodb:*
+          - dax:*
+          - application-autoscaling:DeleteScalingPolicy
+          - application-autoscaling:DeregisterScalableTarget
+          - application-autoscaling:DescribeScalableTargets
+          - application-autoscaling:DescribeScalingActivities
+          - application-autoscaling:DescribeScalingPolicies
+          - application-autoscaling:PutScalingPolicy
+          - application-autoscaling:RegisterScalableTarget
+          - cloudwatch:DeleteAlarms
+          - cloudwatch:DescribeAlarmHistory
+          - cloudwatch:DescribeAlarms
+          - cloudwatch:DescribeAlarmsForMetric
+          - cloudwatch:GetMetricStatistics
+          - cloudwatch:ListMetrics
+          - cloudwatch:PutMetricAlarm
+          - datapipeline:ActivatePipeline
+          - datapipeline:CreatePipeline
+          - datapipeline:DeletePipeline
+          - datapipeline:DescribeObjects
+          - datapipeline:DescribePipelines
+          - datapipeline:GetPipelineDefinition
+          - datapipeline:ListPipelines
+          - datapipeline:PutPipelineDefinition
+          - datapipeline:QueryObjects
+          - ec2:DescribeVpcs
+          - ec2:DescribeSubnets
+          - ec2:DescribeSecurityGroups
+          - iam:GetRole
+          - iam:ListRoles
+          - kms:DescribeKey
+          - kms:ListAliases
+          - sns:CreateTopic
+          - sns:DeleteTopic
+          - sns:ListSubscriptions
+          - sns:ListSubscriptionsByTopic
+          - sns:ListTopics
+          - sns:Subscribe
+          - sns:Unsubscribe
+          - sns:SetTopicAttributes
+          - lambda:CreateFunction
+          - lambda:ListFunctions
+          - lambda:ListEventSourceMappings
+          - lambda:CreateEventSourceMapping
+          - lambda:DeleteEventSourceMapping
+          - lambda:GetFunctionConfiguration
+          - lambda:DeleteFunction
+          - resource-groups:ListGroups
+          - resource-groups:ListGroupResources
+          - resource-groups:GetGroup
+          - resource-groups:GetGroupQuery
+          - resource-groups:DeleteGroup
+          - resource-groups:CreateGroup
+          - tag:GetResources
+          Effect: Allow
+          Resource: "*"
+        - Action: cloudwatch:GetInsightRuleReport
+          Effect: Allow
+          Resource: arn:aws:cloudwatch:*:*:insight-rule/DynamoDBContributorInsights*
+        - Action:
+          - iam:PassRole
+          Effect: Allow
+          Resource: "*"
+          Condition:
+            StringLike:
+              iam:PassedToService:
+              - application-autoscaling.amazonaws.com
+              - dax.amazonaws.com
+        - Effect: Allow
+          Action:
+          - iam:CreateServiceLinkedRole
+          Resource: "*"
+          Condition:
+            StringEquals:
+              iam:AWSServiceName:
+              - replication.dynamodb.amazonaws.com
+              - dax.amazonaws.com
+              - dynamodb.application-autoscaling.amazonaws.com
+              - contributorinsights.dynamodb.amazonaws.com
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          - logs:DescribeLogStreams
+          Resource:
+          - arn:aws:logs:*:*:*
+      Roles:
+      - Ref: InstanceRole
+  ASGAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: 'true'
+      AlarmActions:
+      - Ref: ASGScaleUpPolicy
+      AlarmDescription: Autoscale Scale Up Alarm
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: ASG
+      EvaluationPeriods: '2'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Average
+      Threshold: '75'
+  ASGAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: 'true'
+      AlarmActions:
+      - Ref: ASGScaleDownPolicy
+      AlarmDescription: Autoscale Scale Down Alarm
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: ASG
+      EvaluationPeriods:
+        Ref: EvaluationPeriods
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Period: '60'
+      Statistic: Average
+      Threshold:
+        Ref: Threshold
+Outputs:
+  ASGName:
+    Description: Auto Scaling Group name
+    Value:
+      Ref: ASG

@@ -1,0 +1,20 @@
+Updated Command
+*********************************************************
+IMAGE=`aws ec2 create-image --instance-id  $DevInstanceID --name $ASG_AMI --output text`
+aws autoscaling create-launch-configuration --launch-configuration-name $ASG_LC_Name --image-id $IMAGE --key-name $keyname --instance-monitoring Enabled=false --security-groups $SGroup --block-device-mappings "[{\"DeviceName\": \"/dev/xvda\",\"Ebs\":{\"VolumeSize\":100}}]"  --instance-type t2.micro
+aws autoscaling update-auto-scaling-group --auto-scaling-group-name $ASGroupname --launch-configuration-name $ASG_LC_Name
+aws autoscaling create-or-update-tags --tags ResourceId=$ASGroupname,ResourceType=auto-scaling-group,Key=LCNAme,Value=$ASG_LC_Name,PropagateAtLaunch=true
+aws ec2 terminate-instances --instance-ids $(aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --filters "Name=tag:LCNAme,Values=$ASG_LC_Name_Old" --output text)
+echo  $ASG_LC_Name
+
+*********************************************************
+Old command:
+
+IMAGE=`aws ec2 create-image --instance-id  $Instanceid --name $New_ami_name --output text`
+aws autoscaling create-launch-configuration --launch-configuration-name $newLCname --image-id $IMAGE --key-name $keyname --instance-monitoring Enabled=false --security-groups $SGroup --block-device-mappings "[{\"DeviceName\": \"/dev/xvda\",\"Ebs\":{\"VolumeSize\":100}}]"  --instance-type t2.micro
+aws autoscaling update-auto-scaling-group --auto-scaling-group-name $ASGroupname --launch-configuration-name $newLCname
+aws autoscaling create-or-update-tags --tags ResourceId=$ASGroupname,ResourceType=auto-scaling-group,Key=LCNAme,Value=$newLCname,PropagateAtLaunch=true
+aws ec2 terminate-instances --instance-ids $(aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --filters "Name=tag:LCNAme,Values=$OLDLCname" --output text)
+echo  $newLCname
+
+

@@ -1,0 +1,192 @@
+{
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "Application Loadbalancer.",
+	"Parameters": {
+		"SubnetID1": {
+			"Description": "Subnet ID 1 in AZ 1.",
+			"Type": "String",
+			"Default": "subnet-81cc83c9"
+		},
+		"SubnetID2": {
+			"Description": "Subnet ID 2 in AZ 2.",
+			"Type": "String",
+			"Default": "subnet-f278679b"
+		},
+		"myVPC": {
+			"Description": "VPC",
+			"Type": "String",
+			"Default": "vpc-fd786794"
+		},
+		"ALBName": {
+			"Type": "String",
+			"Description": "ALB Name.",
+			"Default": "TimelineALBpublicIP"
+		},
+		"GSMRSGNSecurityGroupID": {
+			"Type": "String",
+			"Description": "Enter ",
+			"Default": "sg-0cccb3be29585bf6c"
+		},
+		"GSMRSGNSecurityGroupName": {
+			"Type": "String",
+			"Description": "Enter the ",
+			"Default": "TimelineSG"
+		}
+		
+	},
+
+		"Resources": {
+		
+		"GSMRSGNSecurityGroup": {
+          "Type": "AWS::EC2::SecurityGroup",
+		  "Properties": {
+              "GroupDescription": "Security group for accessing ELB",
+              "SecurityGroupEgress": {
+                  "CidrIp": "127.0.0.1/32",
+                  "IpProtocol": -1
+              },
+              "SecurityGroupIngress": {
+                  "CidrIp": "127.0.0.1/32",
+                  "IpProtocol": -1
+              },
+              "VpcId": {
+                 
+                  "Ref": "myVPC"
+              }, 
+      
+		  "Tags": [{
+					"Key": "Name",
+					"Value": {
+						"Ref": "GSMRSGNSecurityGroupName"
+					}
+				}, {
+					"Key": "GroupName",
+					"Value": {
+						"Ref": "GSMRSGNSecurityGroupName"
+					}
+				}
+			]
+          }
+      },
+      "SGIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "GSMRSGNSecurityGroup"
+                },
+                "IpProtocol": -1,
+                "SourceSecurityGroupId": {
+                    "Ref": "GSMRSGNSecurityGroup"
+                }
+				}
+            },
+	  "SGEgress": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "GSMRSGNSecurityGroup"
+                },
+                "IpProtocol": -1,
+                "DestinationSecurityGroupId": {
+                    "Ref": "GSMRSGNSecurityGroup"
+                }
+				}
+            },
+
+         
+		"Listener": {
+			"Type": "AWS::ElasticLoadBalancingV2::Listener",
+			"Properties": {
+				"DefaultActions": [{
+						"TargetGroupArn": {
+							"Ref": "TargetGroup"
+						},
+						"Type": "forward"
+					}
+				],
+				"LoadBalancerArn": {
+					"Ref": "AppliLoadBalancer"
+				},
+				"Port": "80",
+				"Protocol": "HTTP"
+			}
+		},
+		"AppliLoadBalancer": {
+			"Properties": {
+				"Name": {
+					"Ref": "ALBName"
+				},
+				 "SecurityGroups" : [ {
+					"Ref": "GSMRSGNSecurityGroupID"
+				}],
+				"Subnets": [{
+						"Ref": "SubnetID1"
+					}, {
+						"Ref": "SubnetID2"
+					}
+				],
+				"LoadBalancerAttributes": [{
+						"Key": "deletion_protection.enabled",
+						"Value": "false"
+					}
+				],
+				"Tags": [{
+						"Value": {
+							"Ref": "ALBName"
+						},
+						"Key": "Name"
+					}
+				],
+				"Type": "application"
+			},
+			"Type": "AWS::ElasticLoadBalancingV2::LoadBalancer"
+		},
+		"TargetGroup": {
+			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+			"Properties": {
+				"HealthCheckIntervalSeconds": 30,
+				"HealthCheckProtocol": "HTTP",
+				"HealthCheckPath" : "/phpinfo.php",
+				"HealthyThresholdCount": 2,
+				"Name": {
+					"Fn::GetAtt": ["AppliLoadBalancer", "LoadBalancerName"]
+				},
+				"Port": "80",
+				"Protocol": "HTTP",
+				"UnhealthyThresholdCount": 2,
+				"VpcId": {
+					"Ref": "myVPC"
+				},
+				"TargetType": "instance"
+			}
+		}
+	},
+
+	"Outputs": {
+
+		"AppliLoadBalancer": {
+			"Description": "ApplioadBalancer Id",
+			"Value": {
+				"Ref": "AppliLoadBalancer"
+			}
+		},
+		"ALBDNSName": {
+			"Description": "AppliLoadBalancer CName",
+			"Value": {
+				"Fn::GetAtt": ["AppliLoadBalancer", "DNSName"]
+			}
+		},
+		"TargetGroupARN": {
+			"Description": "Forms targetGroup name.",
+			"Value": {
+				"Ref": "TargetGroup"
+			}
+		},
+		"GroupID": {
+			"Description": "Forms GSMRSGNSecurityGroupName ID.",
+			"Value": {
+				"Fn::GetAtt": ["GSMRSGNSecurityGroup", "GroupId"]
+			}
+		}
+	}
+}
